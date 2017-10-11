@@ -134,21 +134,23 @@ func RetrieveBaseRepo(ctx *Context, repo *models.Repository) {
 	}
 }
 
-// composeGoGetImport returns go-get-import meta content.
-func composeGoGetImport(owner, repo string) string {
+// ComposeGoGetImport returns go-get-import meta content.
+func ComposeGoGetImport(owner, repo string) string {
 	return path.Join(setting.Domain, setting.AppSubURL, owner, repo)
 }
 
-// earlyResponseForGoGetMeta responses appropriate go-get meta with status 200
+// EarlyResponseForGoGetMeta responses appropriate go-get meta with status 200
 // if user does not have actual access to the requested repository,
 // or the owner or repository does not exist at all.
 // This is particular a workaround for "go get" command which does not respect
 // .netrc file.
-func earlyResponseForGoGetMeta(ctx *Context) {
+func EarlyResponseForGoGetMeta(ctx *Context) {
+	username := ctx.Params(":username")
+	reponame := ctx.Params(":reponame")
 	ctx.PlainText(200, []byte(com.Expand(`<meta name="go-import" content="{GoGetImport} git {CloneLink}">`,
 		map[string]string{
-			"GoGetImport": composeGoGetImport(ctx.Params(":username"), strings.TrimSuffix(ctx.Params(":reponame"), ".git")),
-			"CloneLink":   models.ComposeHTTPSCloneURL(ctx.Params(":username"), ctx.Params(":reponame")),
+			"GoGetImport": ComposeGoGetImport(username, strings.TrimSuffix(reponame, ".git")),
+			"CloneLink":   models.ComposeHTTPSCloneURL(username, reponame),
 		})))
 }
 
@@ -172,13 +174,54 @@ func RedirectToRepo(ctx *Context, redirectRepoID int64) {
 	ctx.Redirect(redirectPath)
 }
 
-// RepoIDAssignment returns an macaron handler which assigns the repo to the context.
+func repoAssignment(ctx *Context, repo *models.Repository) {
+	// Admin has super access.
+	if ctx.IsSigned && ctx.User.IsAdmin {
+		ctx.Repo.AccessMode = models.AccessModeOwner
+	} else {
+		var userID int64
+		if ctx.User != nil {
+			userID = ctx.User.ID
+		}
+		mode, err := models.AccessLevel(userID, repo)
+		if err != nil {
+			ctx.Handle(500, "AccessLevel", err)
+			return
+		}
+		ctx.Repo.AccessMode = mode
+	}
+
+	// Check access.
+	if ctx.Repo.AccessMode == models.AccessModeNone {
+		if ctx.Query("go-get") == "1" {
+			EarlyResponseForGoGetMeta(ctx)
+			return
+		}
+		ctx.Handle(404, "no access right", nil)
+		return
+	}
+	ctx.Data["HasAccess"] = true
+
+	if repo.IsMirror {
+		var err error
+		ctx.Repo.Mirror, err = models.GetMirrorByRepoID(repo.ID)
+		if err != nil {
+			ctx.Handle(500, "GetMirror", err)
+			return
+		}
+		ctx.Data["MirrorEnablePrune"] = ctx.Repo.Mirror.EnablePrune
+		ctx.Data["MirrorInterval"] = ctx.Repo.Mirror.Interval
+		ctx.Data["Mirror"] = ctx.Repo.Mirror
+	}
+
+	ctx.Repo.Repository = repo
+	ctx.Data["RepoName"] = ctx.Repo.Repository.Name
+	ctx.Data["IsBareRepo"] = ctx.Repo.Repository.IsBare
+}
+
+// RepoIDAssignment returns a macaron handler which assigns the repo to the context.
 func RepoIDAssignment() macaron.Handler {
 	return func(ctx *Context) {
-		var (
-			err error
-		)
-
 		repoID := ctx.ParamsInt64(":repoid")
 
 		// Get repository.
@@ -196,48 +239,7 @@ func RepoIDAssignment() macaron.Handler {
 			ctx.Handle(500, "GetOwner", err)
 			return
 		}
-
-		// Admin has super access.
-		if ctx.IsSigned && ctx.User.IsAdmin {
-			ctx.Repo.AccessMode = models.AccessModeOwner
-		} else {
-			var userID int64
-			if ctx.User != nil {
-				userID = ctx.User.ID
-			}
-			mode, err := models.AccessLevel(userID, repo)
-			if err != nil {
-				ctx.Handle(500, "AccessLevel", err)
-				return
-			}
-			ctx.Repo.AccessMode = mode
-		}
-
-		// Check access.
-		if ctx.Repo.AccessMode == models.AccessModeNone {
-			if ctx.Query("go-get") == "1" {
-				earlyResponseForGoGetMeta(ctx)
-				return
-			}
-			ctx.Handle(404, "no access right", err)
-			return
-		}
-		ctx.Data["HasAccess"] = true
-
-		if repo.IsMirror {
-			ctx.Repo.Mirror, err = models.GetMirrorByRepoID(repo.ID)
-			if err != nil {
-				ctx.Handle(500, "GetMirror", err)
-				return
-			}
-			ctx.Data["MirrorEnablePrune"] = ctx.Repo.Mirror.EnablePrune
-			ctx.Data["MirrorInterval"] = ctx.Repo.Mirror.Interval
-			ctx.Data["Mirror"] = ctx.Repo.Mirror
-		}
-
-		ctx.Repo.Repository = repo
-		ctx.Data["RepoName"] = ctx.Repo.Repository.Name
-		ctx.Data["IsBareRepo"] = ctx.Repo.Repository.IsBare
+		repoAssignment(ctx, repo)
 	}
 }
 
@@ -260,7 +262,7 @@ func RepoAssignment() macaron.Handler {
 			if err != nil {
 				if models.IsErrUserNotExist(err) {
 					if ctx.Query("go-get") == "1" {
-						earlyResponseForGoGetMeta(ctx)
+						EarlyResponseForGoGetMeta(ctx)
 						return
 					}
 					ctx.Handle(404, "GetUserByName", nil)
@@ -282,7 +284,7 @@ func RepoAssignment() macaron.Handler {
 					RedirectToRepo(ctx, redirectRepoID)
 				} else if models.IsErrRepoRedirectNotExist(err) {
 					if ctx.Query("go-get") == "1" {
-						earlyResponseForGoGetMeta(ctx)
+						EarlyResponseForGoGetMeta(ctx)
 						return
 					}
 					ctx.Handle(404, "GetRepositoryByName", nil)
@@ -296,47 +298,10 @@ func RepoAssignment() macaron.Handler {
 		}
 		repo.Owner = owner
 
-		// Admin has super access.
-		if ctx.IsSigned && ctx.User.IsAdmin {
-			ctx.Repo.AccessMode = models.AccessModeOwner
-		} else {
-			var userID int64
-			if ctx.User != nil {
-				userID = ctx.User.ID
-			}
-			mode, err := models.AccessLevel(userID, repo)
-			if err != nil {
-				ctx.Handle(500, "AccessLevel", err)
-				return
-			}
-			ctx.Repo.AccessMode = mode
-		}
-
-		// Check access.
-		if ctx.Repo.AccessMode == models.AccessModeNone {
-			if ctx.Query("go-get") == "1" {
-				earlyResponseForGoGetMeta(ctx)
-				return
-			}
-			ctx.Handle(404, "no access right", err)
+		repoAssignment(ctx, repo)
+		if ctx.Written() {
 			return
 		}
-		ctx.Data["HasAccess"] = true
-
-		if repo.IsMirror {
-			ctx.Repo.Mirror, err = models.GetMirrorByRepoID(repo.ID)
-			if err != nil {
-				ctx.Handle(500, "GetMirror", err)
-				return
-			}
-			ctx.Data["MirrorEnablePrune"] = ctx.Repo.Mirror.EnablePrune
-			ctx.Data["MirrorInterval"] = ctx.Repo.Mirror.Interval
-			ctx.Data["Mirror"] = ctx.Repo.Mirror
-		}
-
-		ctx.Repo.Repository = repo
-		ctx.Data["RepoName"] = ctx.Repo.Repository.Name
-		ctx.Data["IsBareRepo"] = ctx.Repo.Repository.IsBare
 
 		gitRepo, err := git.OpenRepository(models.RepoPath(userName, repoName))
 		if err != nil {
@@ -443,7 +408,7 @@ func RepoAssignment() macaron.Handler {
 		ctx.Data["PullRequestCtx"] = ctx.Repo.PullRequest
 
 		if ctx.Query("go-get") == "1" {
-			ctx.Data["GoGetImport"] = composeGoGetImport(owner.Name, repo.Name)
+			ctx.Data["GoGetImport"] = ComposeGoGetImport(owner.Name, repo.Name)
 			prefix := setting.AppURL + path.Join(owner.Name, repo.Name, "src", ctx.Repo.BranchName)
 			ctx.Data["GoDocDirectory"] = prefix + "{/dir}"
 			ctx.Data["GoDocFile"] = prefix + "{/dir}/{file}#L{line}"
