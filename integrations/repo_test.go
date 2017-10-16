@@ -74,3 +74,23 @@ func TestViewRepo1CloneLinkAuthorized(t *testing.T) {
 	sshURL := fmt.Sprintf("%s@%s:user2/repo1.git", setting.RunUser, setting.SSH.Domain)
 	assert.Equal(t, sshURL, link)
 }
+
+func TestViewRepo3IssuesUnauthorized(t *testing.T) {
+	prepareTestEnv(t)
+
+	session := loginUser(t, "user16")
+
+	req := NewRequest(t, "GET", "/user3/repo3")
+	resp := session.MakeRequest(t, req, http.StatusOK)
+
+	htmlDoc := NewHTMLParser(t, resp.Body)
+
+
+	htmlDoc.AssertElement(t, ".octicon-git-pull-request", true)
+	htmlDoc.AssertElement(t, ".octicon-issue-opened", false)
+
+	req = NewRequest(t, "GET", "/user3/repo3/pulls/2")
+	session.MakeRequest(t, req, http.StatusOK)
+	req = NewRequest(t, "GET", "/user3/repo3/issues/1")
+	session.MakeRequest(t, req, http.StatusNotFound)
+}
