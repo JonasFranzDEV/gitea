@@ -78,9 +78,9 @@ func TestViewRepo1CloneLinkAuthorized(t *testing.T) {
 func TestViewRepo3IssuesUnauthorized(t *testing.T) {
 	prepareTestEnv(t)
 
-	session := loginUser(t, "user16")
+	session := loginUser(t, "user5")
 
-	req := NewRequest(t, "GET", "/user3/repo3")
+	req := NewRequest(t, "GET", "user3/repo3")
 	resp := session.MakeRequest(t, req, http.StatusOK)
 
 	htmlDoc := NewHTMLParser(t, resp.Body)
@@ -89,8 +89,8 @@ func TestViewRepo3IssuesUnauthorized(t *testing.T) {
 	htmlDoc.AssertElement(t, ".octicon-git-pull-request", true)
 	htmlDoc.AssertElement(t, ".octicon-issue-opened", false)
 
-	req = NewRequest(t, "GET", "/user3/repo3/pulls/2")
+	req = NewRequest(t, "GET", "user3/repo3/pulls/2")
 	session.MakeRequest(t, req, http.StatusOK)
-	req = NewRequest(t, "GET", "/user3/repo3/issues/1")
+	req = NewRequest(t, "GET", "user3/repo3/issues/1")
 	session.MakeRequest(t, req, http.StatusNotFound)
 }

@@ -31,7 +31,7 @@
   is_private: true
   num_issues: 1
   num_closed_issues: 0
-  num_pulls: 0
+  num_pulls: 1
   num_closed_pulls: 0
   num_watches: 0
 
