@@ -17,6 +17,7 @@ pipeline:
       - make stylesheets-check
     when:
       event: [ push, tag, pull_request ]
+      
   build:
     image: webhippie/golang:edge
     pull: true
