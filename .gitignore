@@ -46,6 +46,7 @@ coverage.all
 /bin
 /dist
 /custom
+!/custom/conf/app.ini.sample
 /data
 /indexers
 /log
