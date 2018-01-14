@@ -15,6 +15,7 @@ import (
 	"code.gitea.io/gitea/modules/base"
 	"code.gitea.io/gitea/modules/context"
 	"code.gitea.io/gitea/modules/setting"
+	"code.gitea.io/gitea/modules/util"
 	"code.gitea.io/gitea/routers/repo"
 )
 
@@ -28,9 +29,9 @@ func GetUserByName(ctx *context.Context, name string) *models.User {
 	user, err := models.GetUserByName(name)
 	if err != nil {
 		if models.IsErrUserNotExist(err) {
-			ctx.Handle(404, "GetUserByName", nil)
+			ctx.NotFound("GetUserByName", nil)
 		} else {
-			ctx.Handle(500, "GetUserByName", err)
+			ctx.ServerError("GetUserByName", err)
 		}
 		return nil
 	}
@@ -78,7 +79,7 @@ func Profile(ctx *context.Context) {
 	// Show OpenID URIs
 	openIDs, err := models.GetUserOpenIDs(ctxUser.ID)
 	if err != nil {
-		ctx.Handle(500, "GetUserOpenIDs", err)
+		ctx.ServerError("GetUserOpenIDs", err)
 		return
 	}
 
@@ -90,7 +91,7 @@ func Profile(ctx *context.Context) {
 
 	orgs, err := models.GetOrgsByUserID(ctxUser.ID, showPrivate)
 	if err != nil {
-		ctx.Handle(500, "GetOrgsByUserIDDesc", err)
+		ctx.ServerError("GetOrgsByUserIDDesc", err)
 		return
 	}
 
@@ -146,27 +147,28 @@ func Profile(ctx *context.Context) {
 		if len(keyword) == 0 {
 			repos, err = ctxUser.GetStarredRepos(showPrivate, page, setting.UI.User.RepoPagingNum, orderBy.String())
 			if err != nil {
-				ctx.Handle(500, "GetStarredRepos", err)
+				ctx.ServerError("GetStarredRepos", err)
 				return
 			}
 
 			count, err = ctxUser.GetStarredRepoCount(showPrivate)
 			if err != nil {
-				ctx.Handle(500, "GetStarredRepoCount", err)
+				ctx.ServerError("GetStarredRepoCount", err)
 				return
 			}
 		} else {
 			repos, count, err = models.SearchRepositoryByName(&models.SearchRepoOptions{
-				Keyword:  keyword,
-				OwnerID:  ctxUser.ID,
-				OrderBy:  orderBy,
-				Private:  showPrivate,
-				Page:     page,
-				PageSize: setting.UI.User.RepoPagingNum,
-				Starred:  true,
+				Keyword:     keyword,
+				OwnerID:     ctxUser.ID,
+				OrderBy:     orderBy,
+				Private:     showPrivate,
+				Page:        page,
+				PageSize:    setting.UI.User.RepoPagingNum,
+				Starred:     true,
+				Collaborate: util.OptionalBoolFalse,
 			})
 			if err != nil {
-				ctx.Handle(500, "SearchRepositoryByName", err)
+				ctx.ServerError("SearchRepositoryByName", err)
 				return
 			}
 		}
@@ -179,7 +181,7 @@ func Profile(ctx *context.Context) {
 			var total int
 			repos, err = models.GetUserRepositories(ctxUser.ID, showPrivate, page, setting.UI.User.RepoPagingNum, orderBy.String())
 			if err != nil {
-				ctx.Handle(500, "GetRepositories", err)
+				ctx.ServerError("GetRepositories", err)
 				return
 			}
 			ctx.Data["Repos"] = repos
@@ -189,7 +191,7 @@ func Profile(ctx *context.Context) {
 			} else {
 				count, err := models.GetPublicRepositoryCount(ctxUser)
 				if err != nil {
-					ctx.Handle(500, "GetPublicRepositoryCount", err)
+					ctx.ServerError("GetPublicRepositoryCount", err)
 					return
 				}
 				total = int(count)
@@ -199,17 +201,16 @@ func Profile(ctx *context.Context) {
 			ctx.Data["Total"] = total
 		} else {
 			repos, count, err = models.SearchRepositoryByName(&models.SearchRepoOptions{
-				Keyword:     keyword,
-				OwnerID:     ctxUser.ID,
-				OrderBy:     orderBy,
-				Private:     showPrivate,
-				Page:        page,
-				IsProfile:   true,
-				PageSize:    setting.UI.User.RepoPagingNum,
-				Collaborate: true,
+				Keyword:   keyword,
+				OwnerID:   ctxUser.ID,
+				OrderBy:   orderBy,
+				Private:   showPrivate,
+				Page:      page,
+				IsProfile: true,
+				PageSize:  setting.UI.User.RepoPagingNum,
 			})
 			if err != nil {
-				ctx.Handle(500, "SearchRepositoryByName", err)
+				ctx.ServerError("SearchRepositoryByName", err)
 				return
 			}
 
@@ -266,7 +267,7 @@ func Action(ctx *context.Context) {
 	}
 
 	if err != nil {
-		ctx.Handle(500, fmt.Sprintf("Action (%s)", ctx.Params(":action")), err)
+		ctx.ServerError(fmt.Sprintf("Action (%s)", ctx.Params(":action")), err)
 		return
 	}
 

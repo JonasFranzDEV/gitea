@@ -12,12 +12,15 @@ PATH     = data/gitea.db
 
 [indexer]
 ISSUE_INDEXER_PATH = integrations/indexers-mysql/issues.bleve
+REPO_INDEXER_ENABLED = true
+REPO_INDEXER_PATH = integrations/indexers-mysql/repos.bleve
 
 [repository]
 ROOT = integrations/gitea-integration-mysql/gitea-repositories
 
 [repository.local]
 LOCAL_COPY_PATH = tmp/local-repo-mysql
+LOCAL_WIKI_PATH = tmp/local-wiki-mysql
 
 [server]
 SSH_DOMAIN       = localhost
@@ -25,7 +28,8 @@ HTTP_PORT        = 3001
 ROOT_URL         = http://localhost:3001/
 DISABLE_SSH      = false
 SSH_PORT         = 22
-LFS_START_SERVER = false
+LFS_START_SERVER = true
+LFS_CONTENT_PATH = data/lfs-mysql
 OFFLINE_MODE     = false
 
 [mailer]
@@ -47,6 +51,7 @@ ENABLE_FEDERATED_AVATAR = false
 
 [session]
 PROVIDER = file
+PROVIDER_CONFIG = data/sessions-mysql
 
 [log]
 MODE      = console,file
@@ -62,4 +67,3 @@ LEVEL = Debug
 INSTALL_LOCK   = true
 SECRET_KEY     = 9pCviYTWSb
 INTERNAL_TOKEN = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYmYiOjE0OTU1NTE2MTh9.hhSVGOANkaKk3vfCd2jDOIww4pUk0xtg9JRde5UogyQ
-
