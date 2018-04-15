@@ -20,6 +20,7 @@ import (
 	"code.gitea.io/gitea/modules/setting"
 
 	"github.com/urfave/cli"
+	"code.gitea.io/gitea/modules/base"
 )
 
 var (
@@ -138,6 +139,14 @@ func runHookPreReceive(c *cli.Context) error {
 					fail(fmt.Sprintf("protected branch %s can not be pushed to", branchName), "")
 				}
 			}
+		}
+
+		s, err := git.GetRepoSize(repoPath)
+		if err != nil {
+			log.GitLogger.Fatal(2, "retrieve repo size failed")
+		}
+		if s.Size >= 20 * 1024 {
+			fail(fmt.Sprintf("repo exceeded size limit: %s > %s", base.FileSize(s.Size), base.FileSize(20 * 1024)), "")
 		}
 	}
 
