@@ -156,14 +156,6 @@ pipeline:
       event: [ push, pull_request ]
       branch: [ master ]
 
-  build_docs:
-    image: webhippie/hugo:latest
-    pull: true
-    commands:
-      - cd docs
-      - make trans-copy
-      - make clean
-      - make build
 services:
   mysql:
     image: mysql:5.7
