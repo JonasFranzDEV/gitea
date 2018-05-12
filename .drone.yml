@@ -58,7 +58,6 @@ pipeline:
       - make unit-test-coverage
     when:
       event: [ push, pull_request ]
-      branch: [ master ]
 
   test:
     image: webhippie/golang:edge
@@ -109,7 +108,6 @@ pipeline:
       - make integration-test-coverage
     when:
       event: [ push, pull_request ]
-      branch: [ master ]
 
   test-mysql:
     image: webhippie/golang:edge
@@ -145,7 +143,6 @@ pipeline:
       - make coverage
     when:
       event: [ push, pull_request ]
-      branch: [ master ]
 
   coverage:
     image: robertstettner/drone-codecov
@@ -154,7 +151,6 @@ pipeline:
       - coverage.all
     when:
       event: [ push, pull_request ]
-      branch: [ master ]
 
 services:
   mysql:
