@@ -39,7 +39,7 @@ func MainTest(m *testing.M, pathToGiteaRoot string) {
 	var err error
 	giteaRoot = pathToGiteaRoot
 	fixturesDir := filepath.Join(pathToGiteaRoot, "models", "fixtures")
-	if err = createTestEngine(fixturesDir); err != nil {
+	if err = CreateTestEngine(fixturesDir); err != nil {
 		fatalTestError("Error creating test engine: %v\n", err)
 	}
 
@@ -72,7 +72,7 @@ func MainTest(m *testing.M, pathToGiteaRoot string) {
 	os.Exit(exitStatus)
 }
 
-func createTestEngine(fixturesDir string) error {
+func CreateTestEngine(fixturesDir string) error {
 	var err error
 	x, err = xorm.NewEngine("sqlite3", "file::memory:?cache=shared")
 	if err != nil {

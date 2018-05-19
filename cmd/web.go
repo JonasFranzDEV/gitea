@@ -11,8 +11,10 @@ import (
 	"net/http/fcgi"
 	_ "net/http/pprof" // Used for debugging if enabled and a web server is running
 	"os"
+	"path/filepath"
 	"strings"
 
+	"code.gitea.io/gitea/models"
 	"code.gitea.io/gitea/modules/log"
 	"code.gitea.io/gitea/modules/markup/external"
 	"code.gitea.io/gitea/modules/setting"
@@ -22,7 +24,7 @@ import (
 	"github.com/Unknwon/com"
 	context2 "github.com/gorilla/context"
 	"github.com/urfave/cli"
-	ini "gopkg.in/ini.v1"
+	"gopkg.in/ini.v1"
 )
 
 // CmdWeb represents the available web sub-command.
@@ -47,6 +49,12 @@ and it takes care of all the other things for you`,
 			Name:  "pid, P",
 			Value: "/var/run/gitea.pid",
 			Usage: "Custom pid file path",
+		},
+		cli.BoolFlag{
+			Name:   "load-fixtures",
+			EnvVar: "LOAD_FIXTURES",
+			Usage:  "Loads fixtures for testing",
+			Hidden: true,
 		},
 	},
 }
@@ -81,6 +89,15 @@ func runWeb(ctx *cli.Context) error {
 	}
 
 	routers.GlobalInit()
+	if ctx.Bool("load-fixtures") {
+		fixturesDir := filepath.Join("models", "fixtures")
+		if err := models.CreateTestEngine(fixturesDir); err != nil {
+			return fmt.Errorf("Error creating test engine: %v\n", err)
+		}
+		if err := models.PrepareTestDatabase(); err != nil {
+			return err
+		}
+	}
 
 	external.RegisterParsers()
 
