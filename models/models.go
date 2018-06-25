@@ -152,7 +152,7 @@ func LoadConfigs() {
 	DbCfg.SSLMode = sec.Key("SSL_MODE").String()
 	DbCfg.Path = sec.Key("PATH").MustString("data/gitea.db")
 	DbCfg.Timeout = sec.Key("SQLITE_TIMEOUT").MustInt(500)
-	DbCfg.JournalMode = sec.Key("JOURNAL_MODE").MustString("WLA")
+	DbCfg.JournalMode = sec.Key("JOURNAL_MODE").MustString("WAL")
 
 	sec = setting.Cfg.Section("indexer")
 	setting.Indexer.IssuePath = sec.Key("ISSUE_INDEXER_PATH").MustString(path.Join(setting.AppDataPath, "indexers/issues.bleve"))
@@ -248,7 +248,7 @@ func getEngine() (*xorm.Engine, error) {
 		return nil, err
 	}
 	if DbCfg.Type == "sqlite" {
-		journalMode := "WLA" // Using WLA as default mode
+		journalMode := "WAL" // Using WAL as default mode
 		if len(DbCfg.JournalMode) == 0 {
 			journalMode = DbCfg.JournalMode
 		}
@@ -256,6 +256,7 @@ func getEngine() (*xorm.Engine, error) {
 		if err != nil {
 			return nil, err
 		}
+		e.SetMaxOpenConns(1)
 	}
 	return e, nil
 }
