@@ -117,17 +117,17 @@ pipeline:
     when:
       event: [ tag ]
 
-  # Commented until db locking have been resolved!
-  # test-sqlite:
-  #   image: golang:1.10
-  #   pull: true
-  #   group: test
-  #   environment:
-  #     TAGS: bindata
-  #   commands:
-  #     - make test-sqlite
-  #   when:
-  #     event: [ push, tag, pull_request ]
+  Commented until db locking have been resolved!
+  test-sqlite:
+    image: golang:1.10
+    pull: true
+    group: test
+    environment:
+      TAGS: bindata
+    commands:
+      - make test-sqlite
+    when:
+      event: [ push, tag, pull_request ]
 
   test-mysql:
     image: golang:1.10
