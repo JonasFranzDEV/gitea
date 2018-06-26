@@ -107,6 +107,8 @@
 				{{if or (eq .DbCfg.Type "sqlite3") (eq .DbCfg.Type "tidb")}}
 				<dt>{{.i18n.Tr "admin.config.db_path"}}</dt>
 				<dd>{{if .DbCfg.Path}}{{.DbCfg.Path}}{{else}}-{{end}}</dd>
+				<dt>{{.i18n.Tr "admin.config.db_journal_mode"}}</dt>
+				<dd>{{if .DbCfg.JournalMode}}{{.DbCfg.JournalMode}}{{else}}-{{end}}</dd>
 				{{end}}
 			</dl>
 		</div>
