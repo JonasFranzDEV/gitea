@@ -117,7 +117,6 @@ pipeline:
     when:
       event: [ tag ]
 
-  Commented until db locking have been resolved!
   test-sqlite:
     image: golang:1.10
     pull: true
