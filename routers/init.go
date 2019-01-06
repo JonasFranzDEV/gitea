@@ -5,6 +5,7 @@
 package routers
 
 import (
+	"code.gitea.io/gitea/modules/plugins"
 	"path"
 	"strings"
 
@@ -39,6 +40,9 @@ func checkRunMode() {
 func NewServices() {
 	setting.NewServices()
 	mailer.NewContext()
+	if err := plugins.LoadAll(); err != nil {
+		panic(err)
+	}
 	cache.NewContext()
 }
 
