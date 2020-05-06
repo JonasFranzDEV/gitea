@@ -133,6 +133,13 @@ github.com/boombuler/barcode/utils
 github.com/bradfitz/gomemcache/memcache
 # github.com/chris-ramon/douceur v0.2.0
 github.com/chris-ramon/douceur/parser
+# github.com/cloudflare/cfssl v0.0.0-20190726000631-633726f6bcb7
+github.com/cloudflare/cfssl/crypto/pkcs7
+github.com/cloudflare/cfssl/errors
+github.com/cloudflare/cfssl/helpers
+github.com/cloudflare/cfssl/helpers/derhelpers
+github.com/cloudflare/cfssl/log
+github.com/cloudflare/cfssl/revoke
 # github.com/couchbase/gomemcached v0.0.0-20191004160342-7b5da2ec40b2
 ## explicit
 github.com/couchbase/gomemcached
@@ -165,6 +172,13 @@ github.com/denisenkom/go-mssqldb/internal/querytext
 # github.com/dgrijalva/jwt-go v3.2.0+incompatible
 ## explicit
 github.com/dgrijalva/jwt-go
+# github.com/duo-labs/webauthn v0.0.0-20200408163612-425dee8942f4
+## explicit
+github.com/duo-labs/webauthn/metadata
+github.com/duo-labs/webauthn/protocol
+github.com/duo-labs/webauthn/protocol/googletpm
+github.com/duo-labs/webauthn/protocol/webauthncose
+github.com/duo-labs/webauthn/webauthn
 # github.com/dustin/go-humanize v1.0.0
 ## explicit
 github.com/dustin/go-humanize
@@ -350,6 +364,12 @@ github.com/golang-sql/civil
 github.com/golang/protobuf/proto
 # github.com/golang/snappy v0.0.1
 github.com/golang/snappy
+# github.com/google/certificate-transparency-go v1.0.21
+github.com/google/certificate-transparency-go
+github.com/google/certificate-transparency-go/asn1
+github.com/google/certificate-transparency-go/tls
+github.com/google/certificate-transparency-go/x509
+github.com/google/certificate-transparency-go/x509/pkix
 # github.com/google/go-github/v24 v24.0.1
 ## explicit
 github.com/google/go-github/v24/github
@@ -625,6 +645,8 @@ github.com/toqueteos/webbrowser
 # github.com/tstranex/u2f v1.0.0
 ## explicit
 github.com/tstranex/u2f
+# github.com/ugorji/go/codec v1.1.7
+github.com/ugorji/go/codec
 # github.com/unknwon/cae v1.0.0
 ## explicit
 github.com/unknwon/cae
@@ -684,11 +706,14 @@ golang.org/x/crypto/blake2b
 golang.org/x/crypto/blowfish
 golang.org/x/crypto/cast5
 golang.org/x/crypto/chacha20
+golang.org/x/crypto/cryptobyte
+golang.org/x/crypto/cryptobyte/asn1
 golang.org/x/crypto/curve25519
 golang.org/x/crypto/ed25519
 golang.org/x/crypto/ed25519/internal/edwards25519
 golang.org/x/crypto/internal/subtle
 golang.org/x/crypto/md4
+golang.org/x/crypto/ocsp
 golang.org/x/crypto/openpgp
 golang.org/x/crypto/openpgp/armor
 golang.org/x/crypto/openpgp/elgamal
@@ -696,6 +721,8 @@ golang.org/x/crypto/openpgp/errors
 golang.org/x/crypto/openpgp/packet
 golang.org/x/crypto/openpgp/s2k
 golang.org/x/crypto/pbkdf2
+golang.org/x/crypto/pkcs12
+golang.org/x/crypto/pkcs12/internal/rc2
 golang.org/x/crypto/poly1305
 golang.org/x/crypto/scrypt
 golang.org/x/crypto/ssh
