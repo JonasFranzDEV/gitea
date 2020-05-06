@@ -21,6 +21,8 @@ import highlight from './features/highlight.js';
 import ActivityTopAuthors from './components/ActivityTopAuthors.vue';
 import {initNotificationsTable, initNotificationCount} from './features/notification.js';
 
+import * as webauthn from './features/webauthn'
+
 const {AppSubUrl, StaticUrlPrefix, csrf} = window.config;
 
 function htmlEncode(text) {
@@ -2190,19 +2192,17 @@ async function initU2FAuth() {
   if ($('#wait-for-key').length === 0) {
     return;
   }
-  try {
-    await u2fApi.ensureSupport();
-  } catch (e) {
-    // Fallback in case browser do not support U2F
+  if(!webauthn.isSupported()) {
     window.location.href = `${AppSubUrl}/user/two_factor`;
   }
   try {
     const response = await fetch(`${AppSubUrl}/user/u2f/challenge`);
+    console.log(response);
     if (!response.ok) throw new Error('cannot retrieve challenge');
-    const {appId, challenge, registeredKeys} = await response.json();
-    const signature = await u2fApi.sign(appId, challenge, registeredKeys, 30);
+    const signature = await webauthn.signChallenge(await response.json());
     u2fSigned(signature);
   } catch (e) {
+    console.log(e);
     if (e === undefined || e.metaData === undefined) {
       u2fError(1);
       return;
@@ -2278,10 +2278,13 @@ function initU2FRegister() {
   $('#u2f-error').modal({allowMultiple: false});
   $('#register-security-key').on('click', (e) => {
     e.preventDefault();
-    u2fApi.ensureSupport()
-      .then(u2fRegisterRequest)
+    if(!webauthn.isSupported()) {
+      u2fError('browser');
+      return;
+    }
+    u2fRegisterRequest()
       .catch(() => {
-        u2fError('browser');
+        u2fError(1);
       });
   });
 }
@@ -2301,21 +2304,12 @@ async function u2fRegisterRequest() {
     }
     throw new Error('request register failed');
   }
-  let {appId, registerRequests, registeredKeys} = await response.json();
+  const registrationOptions = await response.json();
   $('#nickname').closest('div.field').removeClass('error');
   $('#register-device').modal('show');
-  if (registeredKeys === null) {
-    registeredKeys = [];
-  }
-  u2fApi.register(appId, registerRequests, registeredKeys, 30)
-    .then(u2fRegistered)
-    .catch((reason) => {
-      if (reason === undefined) {
-        u2fError(1);
-        return;
-      }
-      u2fError(reason.metaData.code);
-    });
+  const credentials = await webauthn.createCredentials(registrationOptions);
+  console.log(credentials);
+  u2fRegistered(credentials);
 }
 
 function initWipTitle() {

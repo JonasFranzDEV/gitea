@@ -413,7 +413,12 @@ func U2FChallenge(ctx *context.Context) {
 		ctx.ServerError("NewWebAuthn", err)
 		return
 	}
-	options, sessionData, err := web.BeginLogin(authUser)
+	options, sessionData, err := web.BeginLogin(authUser, func(opts *protocol.PublicKeyCredentialRequestOptions) {
+		if opts.Extensions == nil {
+			opts.Extensions = make(map[string]interface{})
+		}
+		opts.Extensions["appid"] = setting.U2F.AppID
+	})
 	if err != nil {
 		ctx.ServerError("BeginLogin", err)
 		return
@@ -427,9 +432,14 @@ func U2FChallenge(ctx *context.Context) {
 
 // U2FSign authenticates the user by signResp
 func U2FSign(ctx *context.Context) {
-	sessionData := ctx.Session.Get("webauthnSessionData")
+	parsedResponse, err := protocol.ParseCredentialRequestResponse(ctx.Req.Request)
+	if err != nil {
+		ctx.ServerError("ParseCredentialRequestResponseBody", err)
+		return
+	}
+	sessionData, ok := ctx.Session.Get("webauthnSessionData").(*authn.SessionData)
 	idSess := ctx.Session.Get("twofaUid")
-	if sessionData == nil || idSess == nil {
+	if !ok || sessionData == nil || idSess == nil {
 		ctx.ServerError("UserSignIn", errors.New("not in webauthn session"))
 		return
 	}
@@ -451,14 +461,23 @@ func U2FSign(ctx *context.Context) {
 		ctx.ServerError("NewWebAuthn", err)
 		return
 	}
-	parsedResponse, err := protocol.ParseCredentialRequestResponseBody(ctx.Req.Body().ReadCloser())
+	credential, err := web.ValidateLogin(authUser, *sessionData, parsedResponse)
 	if err != nil {
-		ctx.ServerError("ParseCredentialRequestResponseBody", err)
-		return
+		if parsedErr, ok := err.(*protocol.Error); ok && parsedErr.Type == "auth_data" {
+			// maybe this is an old token with AppID instead of RPID
+			web.Config.RPID = setting.U2F.AppID
+			credential, err = web.ValidateLogin(authUser, *sessionData, parsedResponse)
+			if err != nil {
+				ctx.Error(401)
+				return
+			}
+		} else {
+			ctx.Error(401)
+			return
+		}
 	}
-	credential, err := web.ValidateLogin(authUser, sessionData.(authn.SessionData), parsedResponse)
 	if err := authUser.UpdateCredential(credential); err != nil {
-		ctx.Error(401)
+		ctx.ServerError("UpdateCredential", err)
 		return
 	}
 	remember := ctx.Session.Get("twofaRemember").(bool)

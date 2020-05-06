@@ -347,6 +347,10 @@ var (
 		MaxTokenLength:             math.MaxInt16,
 	}
 
+	U2F = struct {
+		AppID string
+	}{}
+
 	WebAuthn = struct {
 		RPID     string
 		RPOrigin string
@@ -1026,15 +1030,12 @@ func NewContext() {
 
 	newMarkup()
 
-	// U2F is deprecated as section name. using webauthn if no configuration is present
 	sec = Cfg.Section("U2F")
-	WebAuthn.RPID = sec.Key("APP_ID").String()
+	U2F.AppID = sec.Key("APP_ID").MustString(strings.TrimRight(AppURL, "/"))
 	sec = Cfg.Section("WebAuthn")
-	if len(WebAuthn.RPID) == 0 {
-		WebAuthn.RPID = sec.Key("RELYING_PARTY_IDENTIFIER").MustString(Domain)
-	}
-	WebAuthn.RPOrigin = sec.Key("RELYING_PARTY_ORIGIN").String()
-	WebAuthn.RPIcon = sec.Key("RELYING_PARTY_ICON").MustString(fmt.Sprintf("%s%s", StaticURLPrefix, "/img/gitea-lg.png"))
+	WebAuthn.RPID = sec.Key("RELYING_PARTY_IDENTIFIER").MustString(Domain)
+	WebAuthn.RPOrigin = sec.Key("RELYING_PARTY_ORIGIN").MustString(U2F.AppID)
+	WebAuthn.RPIcon = sec.Key("RELYING_PARTY_ICON").MustString(fmt.Sprintf("%s%s", AppURL, "img/gitea-lg.png"))
 
 	zip.Verbose = false
 

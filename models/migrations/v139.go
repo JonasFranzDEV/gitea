@@ -5,10 +5,13 @@
 package migrations
 
 import (
-	"crypto/elliptic"
+	"bytes"
 	"fmt"
 
+	"github.com/duo-labs/webauthn/protocol/googletpm"
+	"github.com/duo-labs/webauthn/protocol/webauthncose"
 	"github.com/tstranex/u2f"
+	"github.com/ugorji/go/codec"
 	"xorm.io/xorm"
 
 	"code.gitea.io/gitea/modules/setting"
@@ -46,13 +49,25 @@ func convertU2FToWebAuthn(x *xorm.Engine) error {
 			break
 		}
 		for _, reg := range regs {
+			b := new(bytes.Buffer)
 			r := new(u2f.Registration)
 			if err := r.UnmarshalBinary(reg.Raw); err != nil {
 				return err
 			}
+			if err := codec.NewEncoder(b, new(codec.CborHandle)).Encode(&webauthncose.EC2PublicKeyData{
+				PublicKeyData: webauthncose.PublicKeyData{
+					KeyType:   int64(webauthncose.EllipticKey),
+					Algorithm: int64(webauthncose.AlgES256),
+				},
+				Curve:  int64(googletpm.CurveNISTP256),
+				XCoord: r.PubKey.X.Bytes(),
+				YCoord: r.PubKey.Y.Bytes(),
+			}); err != nil {
+				return err
+			}
 			x.Cols("key_id", "public_key", "attestation_type", "AAGUID").Update(&U2FRegistration{
 				KeyID:           r.KeyHandle,
-				PublicKey:       elliptic.Marshal(r.PubKey.Curve, r.PubKey.X, r.PubKey.Y),
+				PublicKey:       b.Bytes(),
 				AttestationType: "none",
 				AAGUID:          make([]byte, 16),
 			}, reg)

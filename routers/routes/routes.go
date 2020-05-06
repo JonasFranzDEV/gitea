@@ -12,6 +12,8 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/duo-labs/webauthn/webauthn"
+
 	"code.gitea.io/gitea/models"
 	"code.gitea.io/gitea/modules/auth"
 	"code.gitea.io/gitea/modules/context"
@@ -108,6 +110,7 @@ func RouterHandler(level log.Level) func(ctx *macaron.Context) {
 
 // NewMacaron initializes Macaron instance.
 func NewMacaron() *macaron.Macaron {
+	gob.Register(&webauthn.SessionData{})
 	gob.Register(&u2f.Challenge{})
 	var m *macaron.Macaron
 	if setting.RedirectMacaronLog {
@@ -335,7 +338,7 @@ func RegisterRoutes(m *macaron.Macaron) {
 		m.Group("/u2f", func() {
 			m.Get("", user.U2F)
 			m.Get("/challenge", user.U2FChallenge)
-			m.Post("/sign", bindIgnErr(u2f.SignResponse{}), user.U2FSign)
+			m.Post("/sign", user.U2FSign)
 
 		})
 	}, reqSignOut)

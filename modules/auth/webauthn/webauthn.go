@@ -5,7 +5,9 @@
 package webauthn
 
 import (
+	"bytes"
 	"encoding/binary"
+	"fmt"
 
 	authn "github.com/duo-labs/webauthn/webauthn"
 
@@ -24,15 +26,16 @@ func NewWebAuthn() (config *authn.WebAuthn, err error) {
 
 type User struct {
 	models.User
-	credentials []authn.Credential `xorm:"-"`
+	credentials   []authn.Credential `xorm:"-"`
+	registrations models.U2FRegistrationList
 }
 
-func (u *User) LoadCredentials() error {
-	registrations, err := models.GetU2FRegistrationsByUID(u.ID)
+func (u *User) LoadCredentials() (err error) {
+	u.registrations, err = models.GetU2FRegistrationsByUID(u.ID)
 	if err != nil {
 		return err
 	}
-	u.credentials = registrations.ToCredentials()
+	u.credentials = u.registrations.ToCredentials()
 	return nil
 }
 
@@ -47,7 +50,10 @@ func (u *User) WebAuthnName() string {
 }
 
 func (u *User) WebAuthnDisplayName() string {
-	return u.FullName
+	if len(u.FullName) != 0 {
+		return u.FullName
+	}
+	return u.Name
 }
 
 func (u *User) WebAuthnIcon() string {
@@ -64,5 +70,10 @@ func (u *User) AddCredential(name string, credential *authn.Credential) error {
 }
 
 func (u *User) UpdateCredential(credential *authn.Credential) error {
-	return models.UpdateU2FRegistrationByCredential(credential)
+	for _, reg := range u.registrations {
+		if bytes.Equal(reg.KeyID, credential.ID) {
+			return models.UpdateU2FRegistrationByID(reg.ID, credential)
+		}
+	}
+	return fmt.Errorf("registration not found")
 }

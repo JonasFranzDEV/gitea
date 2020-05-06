@@ -5,6 +5,8 @@
 package models
 
 import (
+	"fmt"
+
 	"code.gitea.io/gitea/modules/timeutil"
 
 	"github.com/duo-labs/webauthn/webauthn"
@@ -34,6 +36,7 @@ func (reg U2FRegistration) TableName() string {
 
 // ToCredential will create new credential struct containing the information saved in the database
 func (reg *U2FRegistration) ToCredential() webauthn.Credential {
+	fmt.Println(string(reg.PublicKey))
 	return webauthn.Credential{
 		ID:              reg.KeyID,
 		PublicKey:       reg.PublicKey,
@@ -69,13 +72,13 @@ func (list U2FRegistrationList) ToCredentials() []webauthn.Credential {
 	return regs
 }
 
-func UpdateU2FRegistrationByCredential(credential *webauthn.Credential) error {
-	return updateU2FRegistrationByCredential(x, credential)
+func UpdateU2FRegistrationByID(id int64, credential *webauthn.Credential) error {
+	return updateU2FRegistrationByCredential(x, id, credential)
 }
 
-func updateU2FRegistrationByCredential(e Engine, credential *webauthn.Credential) (err error) {
+func updateU2FRegistrationByCredential(e Engine, id int64, credential *webauthn.Credential) (err error) {
 	_, err = e.
-		Where(&U2FRegistration{KeyID: credential.ID}).
+		ID(id).
 		Cols("public_key", "attestation_type", "AAGUID", "counter").
 		Update(&U2FRegistration{
 			PublicKey:       credential.PublicKey,
