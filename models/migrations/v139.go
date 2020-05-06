@@ -54,6 +54,7 @@ func convertU2FToWebAuthn(x *xorm.Engine) error {
 			if err := r.UnmarshalBinary(reg.Raw); err != nil {
 				return err
 			}
+			// convert public key to cbor compatible key. this uses the standards defined by the U2F specification
 			if err := codec.NewEncoder(b, new(codec.CborHandle)).Encode(&webauthncose.EC2PublicKeyData{
 				PublicKeyData: webauthncose.PublicKeyData{
 					KeyType:   int64(webauthncose.EllipticKey),

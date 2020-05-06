@@ -66,6 +66,11 @@ func U2FRegister(ctx *context.Context, form auth.U2FRegistrationForm) {
 
 // U2FRegisterPost receives the response of the security key
 func U2FRegisterPost(ctx *context.Context) {
+	parsedResponse, err := protocol.ParseCredentialCreationResponse(ctx.Req.Request)
+	if err != nil {
+		ctx.ServerError("ParseCredentialCreationResponseBody", err)
+		return
+	}
 	authUser := &webauthn.User{
 		User: *ctx.User,
 	}
@@ -73,9 +78,9 @@ func U2FRegisterPost(ctx *context.Context) {
 		ctx.ServerError("LoadCredentials", err)
 		return
 	}
-	sessionData := ctx.Session.Get("webauthnSessionData")
+	sessionData, ok := ctx.Session.Get("webauthnSessionData").(*authn.SessionData)
 	u2fName := ctx.Session.Get("u2fName")
-	if sessionData == nil || u2fName == nil {
+	if !ok || sessionData == nil || u2fName == nil {
 		ctx.ServerError("U2FRegisterPost", errors.New("not in U2F session"))
 		return
 	}
@@ -85,12 +90,7 @@ func U2FRegisterPost(ctx *context.Context) {
 		ctx.ServerError("NewWebAuthn", err)
 		return
 	}
-	parsedResponse, err := protocol.ParseCredentialCreationResponseBody(ctx.Req.Body().ReadCloser())
-	if err != nil {
-		ctx.ServerError("ParseCredentialCreationResponseBody", err)
-		return
-	}
-	credential, err := web.CreateCredential(authUser, sessionData.(authn.SessionData), parsedResponse)
+	credential, err := web.CreateCredential(authUser, *sessionData, parsedResponse)
 	if err := authUser.AddCredential(name, credential); err != nil {
 		ctx.ServerError("AddCredential", err)
 		return
