@@ -5,18 +5,22 @@
 package migrations
 
 import (
-	"code.gitea.io/gitea/modules/setting"
 	"crypto/elliptic"
 	"fmt"
-	"github.com/duo-labs/webauthn/webauthn"
+
 	"github.com/tstranex/u2f"
 	"xorm.io/xorm"
+
+	"code.gitea.io/gitea/modules/setting"
 )
 
 type U2FRegistration struct {
-	ID      int64 `xorm:"pk autoincr"`
-	Raw     []byte
-	Counter uint32 `xorm:"BIGINT"`
+	ID              int64 `xorm:"pk autoincr"`
+	Raw             []byte
+	KeyID           []byte
+	PublicKey       []byte
+	AttestationType string
+	AAGUID          []byte `xorm:"AAGUID"`
 }
 
 func (reg U2FRegistration) TableName() string {
@@ -24,6 +28,9 @@ func (reg U2FRegistration) TableName() string {
 }
 
 func convertU2FToWebAuthn(x *xorm.Engine) error {
+	if err := x.Sync2(&U2FRegistration{}); err != nil {
+		return err
+	}
 	var limit = setting.Database.IterateBufferSize
 	if limit <= 0 {
 		limit = 50
@@ -43,18 +50,16 @@ func convertU2FToWebAuthn(x *xorm.Engine) error {
 			if err := r.UnmarshalBinary(reg.Raw); err != nil {
 				return err
 			}
-			credential := &webauthn.Credential{
-				ID:              r.KeyHandle,
+			x.Cols("key_id", "public_key", "attestation_type", "AAGUID").Update(&U2FRegistration{
+				KeyID:           r.KeyHandle,
 				PublicKey:       elliptic.Marshal(r.PubKey.Curve, r.PubKey.X, r.PubKey.Y),
 				AttestationType: "none",
-				Authenticator: webauthn.Authenticator{
-					AAGUID:    r.AttestationCert.Raw,
-					SignCount: reg.Counter,
-				},
-			}
-			fmt.Sprintf("%v\n", credential)
+				AAGUID:          make([]byte, 16),
+			}, reg)
 		}
+		i += len(regs)
 
 	}
+	// TODO drop raw column
 	return nil
 }

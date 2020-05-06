@@ -11,9 +11,13 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/duo-labs/webauthn/protocol"
+	authn "github.com/duo-labs/webauthn/webauthn"
+
 	"code.gitea.io/gitea/models"
 	"code.gitea.io/gitea/modules/auth"
 	"code.gitea.io/gitea/modules/auth/oauth2"
+	"code.gitea.io/gitea/modules/auth/webauthn"
 	"code.gitea.io/gitea/modules/base"
 	"code.gitea.io/gitea/modules/context"
 	"code.gitea.io/gitea/modules/log"
@@ -27,7 +31,6 @@ import (
 
 	"gitea.com/macaron/captcha"
 	"github.com/markbates/goth"
-	"github.com/tstranex/u2f"
 )
 
 const (
@@ -393,84 +396,90 @@ func U2FChallenge(ctx *context.Context) {
 		return
 	}
 	id := idSess.(int64)
-	regs, err := models.GetU2FRegistrationsByUID(id)
+	user, err := models.GetUserByID(id)
 	if err != nil {
 		ctx.ServerError("UserSignIn", err)
 		return
 	}
-	if len(regs) == 0 {
-		ctx.ServerError("UserSignIn", errors.New("no device registered"))
+	authUser := &webauthn.User{
+		User: *user,
+	}
+	if err := authUser.LoadCredentials(); err != nil {
+		ctx.ServerError("LoadCredentials", err)
 		return
 	}
-	challenge, err := u2f.NewChallenge(setting.U2F.AppID, setting.U2F.TrustedFacets)
+	web, err := webauthn.NewWebAuthn()
 	if err != nil {
-		ctx.ServerError("u2f.NewChallenge", err)
+		ctx.ServerError("NewWebAuthn", err)
 		return
 	}
-	if err = ctx.Session.Set("u2fChallenge", challenge); err != nil {
+	options, sessionData, err := web.BeginLogin(authUser)
+	if err != nil {
+		ctx.ServerError("BeginLogin", err)
+		return
+	}
+	if err = ctx.Session.Set("webauthnSessionData", sessionData); err != nil {
 		ctx.ServerError("UserSignIn", err)
 		return
 	}
-	ctx.JSON(200, challenge.SignRequest(regs.ToRegistrations()))
+	ctx.JSON(200, options)
 }
 
 // U2FSign authenticates the user by signResp
-func U2FSign(ctx *context.Context, signResp u2f.SignResponse) {
-	challSess := ctx.Session.Get("u2fChallenge")
+func U2FSign(ctx *context.Context) {
+	sessionData := ctx.Session.Get("webauthnSessionData")
 	idSess := ctx.Session.Get("twofaUid")
-	if challSess == nil || idSess == nil {
-		ctx.ServerError("UserSignIn", errors.New("not in U2F session"))
+	if sessionData == nil || idSess == nil {
+		ctx.ServerError("UserSignIn", errors.New("not in webauthn session"))
 		return
 	}
-	challenge := challSess.(*u2f.Challenge)
 	id := idSess.(int64)
-	regs, err := models.GetU2FRegistrationsByUID(id)
+	user, err := models.GetUserByID(id)
 	if err != nil {
 		ctx.ServerError("UserSignIn", err)
 		return
 	}
-	for _, reg := range regs {
-		r, err := reg.Parse()
-		if err != nil {
-			log.Fatal("parsing u2f registration: %v", err)
-			continue
+	authUser := &webauthn.User{
+		User: *user,
+	}
+	if err := authUser.LoadCredentials(); err != nil {
+		ctx.ServerError("LoadCredentials", err)
+		return
+	}
+	web, err := webauthn.NewWebAuthn()
+	if err != nil {
+		ctx.ServerError("NewWebAuthn", err)
+		return
+	}
+	parsedResponse, err := protocol.ParseCredentialRequestResponseBody(ctx.Req.Body().ReadCloser())
+	if err != nil {
+		ctx.ServerError("ParseCredentialRequestResponseBody", err)
+		return
+	}
+	credential, err := web.ValidateLogin(authUser, sessionData.(authn.SessionData), parsedResponse)
+	if err := authUser.UpdateCredential(credential); err != nil {
+		ctx.Error(401)
+		return
+	}
+	remember := ctx.Session.Get("twofaRemember").(bool)
+	if ctx.Session.Get("linkAccount") != nil {
+		gothUser := ctx.Session.Get("linkAccountGothUser")
+		if gothUser == nil {
+			ctx.ServerError("UserSignIn", errors.New("not in LinkAccount session"))
+			return
 		}
-		newCounter, authErr := r.Authenticate(signResp, *challenge, reg.Counter)
-		if authErr == nil {
-			reg.Counter = newCounter
-			user, err := models.GetUserByID(id)
-			if err != nil {
-				ctx.ServerError("UserSignIn", err)
-				return
-			}
-			remember := ctx.Session.Get("twofaRemember").(bool)
-			if err := reg.UpdateCounter(); err != nil {
-				ctx.ServerError("UserSignIn", err)
-				return
-			}
 
-			if ctx.Session.Get("linkAccount") != nil {
-				gothUser := ctx.Session.Get("linkAccountGothUser")
-				if gothUser == nil {
-					ctx.ServerError("UserSignIn", errors.New("not in LinkAccount session"))
-					return
-				}
-
-				err = externalaccount.LinkAccountToUser(user, gothUser.(goth.User))
-				if err != nil {
-					ctx.ServerError("UserSignIn", err)
-					return
-				}
-			}
-			redirect := handleSignInFull(ctx, user, remember, false)
-			if redirect == "" {
-				redirect = setting.AppSubURL + "/"
-			}
-			ctx.PlainText(200, []byte(redirect))
+		err = externalaccount.LinkAccountToUser(user, gothUser.(goth.User))
+		if err != nil {
+			ctx.ServerError("UserSignIn", err)
 			return
 		}
 	}
-	ctx.Error(401)
+	redirect := handleSignInFull(ctx, user, remember, false)
+	if redirect == "" {
+		redirect = setting.AppSubURL + "/"
+	}
+	ctx.PlainText(200, []byte(redirect))
 }
 
 // This handles the final part of the sign-in process of the user.

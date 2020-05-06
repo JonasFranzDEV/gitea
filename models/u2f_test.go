@@ -7,8 +7,8 @@ package models
 import (
 	"testing"
 
+	"github.com/duo-labs/webauthn/webauthn"
 	"github.com/stretchr/testify/assert"
-	"github.com/tstranex/u2f"
 )
 
 func TestGetU2FRegistrationByID(t *testing.T) {
@@ -56,7 +56,7 @@ func TestCreateRegistration(t *testing.T) {
 	assert.NoError(t, PrepareTestDatabase())
 	user := AssertExistsAndLoadBean(t, &User{ID: 1}).(*User)
 
-	res, err := CreateRegistration(user, "U2F Created Key", &u2f.Registration{Raw: []byte("Test")})
+	res, err := CreateRegistration(user, "U2F Created Key", &webauthn.Credential{})
 	assert.NoError(t, err)
 	assert.Equal(t, "U2F Created Key", res.Name)
 	assert.Equal(t, []byte("Test"), res.Raw)

@@ -5,19 +5,24 @@
 package models
 
 import (
-	"code.gitea.io/gitea/modules/log"
 	"code.gitea.io/gitea/modules/timeutil"
 
-	"github.com/tstranex/u2f"
+	"github.com/duo-labs/webauthn/webauthn"
 )
 
 // U2FRegistration represents the registration data and counter of a security key
 type U2FRegistration struct {
-	ID          int64 `xorm:"pk autoincr"`
-	Name        string
-	UserID      int64 `xorm:"INDEX"`
-	Raw         []byte
-	Counter     uint32             `xorm:"BIGINT"`
+	ID      int64 `xorm:"pk autoincr"`
+	Name    string
+	UserID  int64 `xorm:"INDEX"`
+	Raw     []byte
+	Counter uint32 `xorm:"BIGINT"`
+
+	KeyID           []byte `xorm:""`
+	PublicKey       []byte
+	AttestationType string
+	AAGUID          []byte `xorm:"AAGUID"`
+
 	CreatedUnix timeutil.TimeStamp `xorm:"INDEX created"`
 	UpdatedUnix timeutil.TimeStamp `xorm:"INDEX updated"`
 }
@@ -27,10 +32,17 @@ func (reg U2FRegistration) TableName() string {
 	return "u2f_registration"
 }
 
-// Parse will convert the db entry U2FRegistration to an u2f.Registration struct
-func (reg *U2FRegistration) Parse() (*u2f.Registration, error) {
-	r := new(u2f.Registration)
-	return r, r.UnmarshalBinary(reg.Raw)
+// ToCredential will create new credential struct containing the information saved in the database
+func (reg *U2FRegistration) ToCredential() webauthn.Credential {
+	return webauthn.Credential{
+		ID:              reg.KeyID,
+		PublicKey:       reg.PublicKey,
+		AttestationType: reg.AttestationType,
+		Authenticator: webauthn.Authenticator{
+			AAGUID:    reg.AAGUID,
+			SignCount: reg.Counter,
+		},
+	}
 }
 
 func (reg *U2FRegistration) updateCounter(e Engine) error {
@@ -47,18 +59,31 @@ func (reg *U2FRegistration) UpdateCounter() error {
 type U2FRegistrationList []*U2FRegistration
 
 // ToRegistrations will convert all U2FRegistrations to u2f.Registrations
-func (list U2FRegistrationList) ToRegistrations() []u2f.Registration {
-	regs := make([]u2f.Registration, 0, len(list))
+func (list U2FRegistrationList) ToCredentials() []webauthn.Credential {
+	regs := make([]webauthn.Credential, 0, len(list))
 	for _, reg := range list {
-		r, err := reg.Parse()
-		if err != nil {
-			log.Fatal("parsing u2f registration: %v", err)
-			continue
-		}
-		regs = append(regs, *r)
+		r := reg.ToCredential()
+		regs = append(regs, r)
 	}
 
 	return regs
+}
+
+func UpdateU2FRegistrationByCredential(credential *webauthn.Credential) error {
+	return updateU2FRegistrationByCredential(x, credential)
+}
+
+func updateU2FRegistrationByCredential(e Engine, credential *webauthn.Credential) (err error) {
+	_, err = e.
+		Where(&U2FRegistration{KeyID: credential.ID}).
+		Cols("public_key", "attestation_type", "AAGUID", "counter").
+		Update(&U2FRegistration{
+			PublicKey:       credential.PublicKey,
+			AttestationType: credential.AttestationType,
+			AAGUID:          credential.Authenticator.AAGUID,
+			Counter:         credential.Authenticator.SignCount,
+		})
+	return
 }
 
 func getU2FRegistrationsByUID(e Engine, uid int64) (U2FRegistrationList, error) {
@@ -86,18 +111,17 @@ func GetU2FRegistrationsByUID(uid int64) (U2FRegistrationList, error) {
 	return getU2FRegistrationsByUID(x, uid)
 }
 
-func createRegistration(e Engine, user *User, name string, reg *u2f.Registration) (*U2FRegistration, error) {
-	raw, err := reg.MarshalBinary()
-	if err != nil {
-		return nil, err
-	}
+func createRegistration(e Engine, user *User, name string, credential *webauthn.Credential) (*U2FRegistration, error) {
 	r := &U2FRegistration{
-		UserID:  user.ID,
-		Name:    name,
-		Counter: 0,
-		Raw:     raw,
+		UserID:          user.ID,
+		Name:            name,
+		KeyID:           credential.ID,
+		PublicKey:       credential.PublicKey,
+		AttestationType: credential.AttestationType,
+		AAGUID:          credential.Authenticator.AAGUID,
+		Counter:         credential.Authenticator.SignCount,
 	}
-	_, err = e.InsertOne(r)
+	_, err := e.InsertOne(r)
 	if err != nil {
 		return nil, err
 	}
@@ -105,8 +129,8 @@ func createRegistration(e Engine, user *User, name string, reg *u2f.Registration
 }
 
 // CreateRegistration will create a new U2FRegistration from the given Registration
-func CreateRegistration(user *User, name string, reg *u2f.Registration) (*U2FRegistration, error) {
-	return createRegistration(x, user, name, reg)
+func CreateRegistration(user *User, name string, credential *webauthn.Credential) (*U2FRegistration, error) {
+	return createRegistration(x, user, name, credential)
 }
 
 // DeleteRegistration will delete U2FRegistration

@@ -27,7 +27,6 @@ import (
 	"code.gitea.io/gitea/modules/log"
 	"code.gitea.io/gitea/modules/user"
 
-	shellquote "github.com/kballard/go-shellquote"
 	version "github.com/mcuadros/go-version"
 	"github.com/unknwon/cae/zip"
 	"github.com/unknwon/com"
@@ -348,9 +347,10 @@ var (
 		MaxTokenLength:             math.MaxInt16,
 	}
 
-	U2F = struct {
-		AppID         string
-		TrustedFacets []string
+	WebAuthn = struct {
+		RPID     string
+		RPOrigin string
+		RPIcon   string
 	}{}
 
 	// Metrics settings
@@ -1026,9 +1026,15 @@ func NewContext() {
 
 	newMarkup()
 
+	// U2F is deprecated as section name. using webauthn if no configuration is present
 	sec = Cfg.Section("U2F")
-	U2F.TrustedFacets, _ = shellquote.Split(sec.Key("TRUSTED_FACETS").MustString(strings.TrimRight(AppURL, "/")))
-	U2F.AppID = sec.Key("APP_ID").MustString(strings.TrimRight(AppURL, "/"))
+	WebAuthn.RPID = sec.Key("APP_ID").String()
+	sec = Cfg.Section("WebAuthn")
+	if len(WebAuthn.RPID) == 0 {
+		WebAuthn.RPID = sec.Key("RELYING_PARTY_IDENTIFIER").MustString(Domain)
+	}
+	WebAuthn.RPOrigin = sec.Key("RELYING_PARTY_ORIGIN").String()
+	WebAuthn.RPIcon = sec.Key("RELYING_PARTY_ICON").MustString(fmt.Sprintf("%s%s", StaticURLPrefix, "/img/gitea-lg.png"))
 
 	zip.Verbose = false
 

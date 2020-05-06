@@ -7,26 +7,40 @@ package setting
 import (
 	"errors"
 
+	"github.com/duo-labs/webauthn/protocol"
+	authn "github.com/duo-labs/webauthn/webauthn"
+
 	"code.gitea.io/gitea/models"
 	"code.gitea.io/gitea/modules/auth"
+	"code.gitea.io/gitea/modules/auth/webauthn"
 	"code.gitea.io/gitea/modules/context"
 	"code.gitea.io/gitea/modules/setting"
-
-	"github.com/tstranex/u2f"
 )
 
-// U2FRegister initializes the u2f registration procedure
+// U2FRegister initializes the webauthn registration procedure
 func U2FRegister(ctx *context.Context, form auth.U2FRegistrationForm) {
 	if form.Name == "" {
 		ctx.Error(409)
 		return
 	}
-	challenge, err := u2f.NewChallenge(setting.U2F.AppID, setting.U2F.TrustedFacets)
-	if err != nil {
-		ctx.ServerError("NewChallenge", err)
+	authUser := &webauthn.User{
+		User: *ctx.User,
+	}
+	if err := authUser.LoadCredentials(); err != nil {
+		ctx.ServerError("LoadCredentials", err)
 		return
 	}
-	err = ctx.Session.Set("u2fChallenge", challenge)
+	web, err := webauthn.NewWebAuthn()
+	if err != nil {
+		ctx.ServerError("NewWebAuthn", err)
+		return
+	}
+	options, sessionData, err := web.BeginRegistration(authUser)
+	if err != nil {
+		ctx.ServerError("BeginRegistration", err)
+		return
+	}
+	err = ctx.Session.Set("webauthnSessionData", sessionData)
 	if err != nil {
 		ctx.ServerError("Session.Set", err)
 		return
@@ -47,31 +61,38 @@ func U2FRegister(ctx *context.Context, form auth.U2FRegistrationForm) {
 		ctx.ServerError("", err)
 		return
 	}
-	ctx.JSON(200, u2f.NewWebRegisterRequest(challenge, regs.ToRegistrations()))
+	ctx.JSON(200, options)
 }
 
 // U2FRegisterPost receives the response of the security key
-func U2FRegisterPost(ctx *context.Context, response u2f.RegisterResponse) {
-	challSess := ctx.Session.Get("u2fChallenge")
+func U2FRegisterPost(ctx *context.Context) {
+	authUser := &webauthn.User{
+		User: *ctx.User,
+	}
+	if err := authUser.LoadCredentials(); err != nil {
+		ctx.ServerError("LoadCredentials", err)
+		return
+	}
+	sessionData := ctx.Session.Get("webauthnSessionData")
 	u2fName := ctx.Session.Get("u2fName")
-	if challSess == nil || u2fName == nil {
+	if sessionData == nil || u2fName == nil {
 		ctx.ServerError("U2FRegisterPost", errors.New("not in U2F session"))
 		return
 	}
-	challenge := challSess.(*u2f.Challenge)
 	name := u2fName.(string)
-	config := &u2f.Config{
-		// Chrome 66+ doesn't return the device's attestation
-		// certificate by default.
-		SkipAttestationVerify: true,
-	}
-	reg, err := u2f.Register(response, *challenge, config)
+	web, err := webauthn.NewWebAuthn()
 	if err != nil {
-		ctx.ServerError("u2f.Register", err)
+		ctx.ServerError("NewWebAuthn", err)
 		return
 	}
-	if _, err = models.CreateRegistration(ctx.User, name, reg); err != nil {
-		ctx.ServerError("u2f.Register", err)
+	parsedResponse, err := protocol.ParseCredentialCreationResponseBody(ctx.Req.Body().ReadCloser())
+	if err != nil {
+		ctx.ServerError("ParseCredentialCreationResponseBody", err)
+		return
+	}
+	credential, err := web.CreateCredential(authUser, sessionData.(authn.SessionData), parsedResponse)
+	if err := authUser.AddCredential(name, credential); err != nil {
+		ctx.ServerError("AddCredential", err)
 		return
 	}
 	ctx.Status(200)
